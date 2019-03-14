@@ -1,26 +1,26 @@
 // ConsoleApplication3.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
-//编译环境：VS2017
+//编译环境：vs2017
 
 #include "pch.h"
 #include <conio.h>
 #include <iostream>
 
-typedef unsigned short  uin16_t;
-typedef unsigned char   uin8_t;
+typedef unsigned short  uint16_t;
+typedef unsigned char   uint8_t;
 typedef unsigned        char    INT8U;                                  // SRAM区，8位无符号整数
 typedef signed          char    INT8S;                                  // SRAM区，8位有符号整数
 typedef unsigned        short   INT16U;                                 // SRAM区，16位无符号整数
 typedef signed          short   INT16S;                                 // SRAM区，16位有符号整数
 typedef unsigned        long    INT32U;                                 // SRAM区，32位无符号整数
 typedef signed          long    INT32S;                                 // SRAM区，32位有符号整数
-uint8_t invert_8(uin8_t invert)
+uint8_t invert_8(uint8_t invert)
 {
 	invert = ((invert & 0x55) << 1 | (invert & 0xAA) >> 1);
 	invert = ((invert & 0x33) << 2 | (invert & 0xCC) >> 2);
 	invert = ((invert & 0x0F) << 4 | (invert & 0xF0) >> 4);
 	return invert;
 }
-uint16_t invert_16(uin16_t invert)
+uint16_t invert_16(uint16_t invert)
 {
 	invert = ((invert & 0x5555) << 1 | (invert & 0xAAAA) >> 1);
 	invert = ((invert & 0x3333) << 2 | (invert & 0xCCCC) >> 2);
@@ -65,19 +65,19 @@ INT16U Modbus_Crc16(INT8U *addr, INT16U num)
 uint16_t crc16(unsigned char *addr, int num, uint16_t crc)
 {//调用时，第三个参数填0XFFFF
 	int i;
-	for (; num > 0; num--)             
+	for (; num > 0; num--)
 	{
-		crc = crc ^ (*addr++ << 8);    
-		for (i = 0; i < 8; i++)        
+		crc = crc ^ (*addr++ << 8);
+		for (i = 0; i < 8; i++)
 		{
-			if (crc & 0x8000)          
-			crc = (crc << 1) ^ POLY;   
-			else                       
-			crc <<= 1;                 
-		}                              
-		crc &= 0xFFFF;                 
-	}                                  
-	return(crc);                       
+			if (crc & 0x8000)
+				crc = (crc << 1) ^ POLY;
+			else
+				crc <<= 1;
+		}
+		crc &= 0xFFFF;
+	}
+	return(crc);
 }
 /**********************************************直接计算法******************************************/
 
@@ -123,24 +123,67 @@ width_t crcCompute(unsigned char * message, unsigned int nBytes)
 	{
 		byte = (remainder >> (WIDTH - 8)) ^ message[offset];
 		remainder = invert_16(remainder);
-		remainder = (remainder >> 8) | (remainder<<8);
+		remainder = (remainder >> 8) | (remainder << 8);
 		remainder = crcTable[byte] ^ (remainder << 8);
 	}
 	remainder = invert_16(remainder);
 	return (remainder ^ FINAL_XOR_VALUE);
 }
 /**********************************************查表法******************************************/
+
+/********************************************************************************************
+*  函 数 名：Modbus_Crc16_Extend
+*  描    述: Modbus CRC校验(Modbus_Crc16扩展函数)
+*  输入参数： INT8U *addr, INT16U num, INT16U crc
+*  输出参数： 无
+*  返 回 值: CRC校验码
+*  作    者: vic
+*  完成日期: 2019-3-14 09:01:19
+*  注意事项: 1.INT16U crc固定填入0xFFFF，则此函数域Modbus_Crc16无异
+			2.如果需要累积校验，可填入上一次的CRC校验码
+********************************************************************************************/
+INT16U Modbus_Crc16_Extend(INT8U *addr, INT16U num, INT16U crc)
+{
+#define POLY        0x8005
+	INT8U  i;
+	INT8U  invert;
+
+	while (num--)
+	{
+		//输入反转
+		invert = invert_8(*addr++);
+		if (crc != 0xFFFF)
+		{
+			crc = invert_16(crc);
+		}
+		crc = crc ^ (invert << 8);
+		//计算crc
+		for (i = 0; i < 8; i++)
+		{
+			if (crc & 0x8000)
+				crc = (crc << 1) ^ POLY;
+			else
+				crc <<= 1;
+		}
+		crc &= 0xFFFF;
+	}
+	//输出数据反转
+	crc = invert_16(crc);
+	return (crc);
+}
+
+
 void test(void)
 {
 	uint16_t c;
-	uint8_t m[100] = { 0xAA,0x03,0x00,0x00,0x00,0x01};
-	c = Modbus_Crc16(m,6);
+	uint8_t m[100] = { 0xAA,0x03,0x00,0x00,0x00,0x01 };
+	c = Modbus_Crc16(m, 6);
 	printf("0X%04X\r\n", c);
 }
 int main()
 {
-	uint8_t  a[300],b[100],k=0;
-	uint16_t i,j,c;
+	uint8_t  a[300], b[100], k = 0;
+	uint16_t i, j, c;
 	//test();
 	while (1)
 	{
@@ -161,7 +204,7 @@ int main()
 			{
 				a[i] = k - 'a' + 10;
 			}
-			else if(0x1b == k)
+			else if (0x1b == k)
 			{
 				//esc退出
 				return 0;
@@ -174,7 +217,7 @@ int main()
 		}
 		c = Modbus_Crc16(b, j / 3);
 		printf("CRC16校验结果： ");
-		printf("0X%04X\r\n", c);
+		printf("0X%04X\r\n\r\n", c);
 		k = _getch();
 		if (0x1b == k)
 		{
@@ -186,3 +229,5 @@ int main()
 	//printf("0X%04X\r\n", c);
 	//test();
 }
+
+
