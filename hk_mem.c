@@ -44,18 +44,27 @@ uint16_t kfifo_get(kfifo *fifo, uint8_t *buffer, uint16_t len)
 #define SMALL_BLOCK_SIZE        256
 #define LARGE_BLOCK_SIZE        2048
 
+typedef enum __BLOCK_SEQ_{
+    SBLOCK0 = 0,
+    SBLOCK1,SBLOCK2,SBLOCK3,SBLOCK4,
+    SBLOCK5,SBLOCK6,SBLOCK7,LBLOCK0,
+    LBLOCK1,LBLOCK2,LBLOCK3,LBLOCK4,
+}BLOCK_SEQ;
 
-struct __BLOCK_INFO_ 
-{
-    LTimer  life _timer;              //数据小块生命周期
-    uint8_t *object；                 //位置索引
-    uint8_t  deal;                    //完整处理标识
-    uint8_t  type;                    //数据小块存储类型
+typedef enum __BLOCK_FREE_MODE_{
+    FREE_FORCE,
+    FREE_DEFAULT,    
+}BLOCK_FREE_MODE;
+
+typedef struct __BLOCK_INFO_ {
+    uint32_t  lifecycle;               //数据小块生命周期:单位s
+    uint8_t   *object；                //位置索引
+    uint8_t   deal;                    //完整处理标识
+    uint8_t   type;                    //数据小块存储类型
 }BLOCK_INFO;                          //每个数据块保存的必要说明信息
 
 
-typedef struct __MEMPOOL_
-{
+typedef struct __MEMPOOL_{
     uint32_t    sbfree;                  
     uint32_t    lbfree;
     BLOCK_INFO  sbinfo[SMALL_BLOCK_NUM];
@@ -72,32 +81,45 @@ Mem_malloc(u8,u8);//请求分配数据存储块
 Mem_free(u8 *,u8);//释放分配的数据内存块
 
 
-Mem_init(void)
+void Mem_init(void)
 {
-
+    memset(mempool,0,sizeof(mempool));
+    mempool.sbfree = 0x87654321;
+    mempool.lbfree = 0x00054321;  
 }
-
+void Mem_life_update(void)
+{
+    uint8_t i;
+    for(i = 0; i < 8; i++)
+    {
+        mempool.sbinfo[i].lifecycle -= mempool.sbinfo[i].lifecycle ? 1:0;
+    }
+    for(i = 0; i < 5; i++)
+    {
+        mempool.sbinfo[i].lifecycle -= mempool.sbinfo[i].lifecycle ? 1:0;
+    }
+}
 uint8_t *Mem_malloc(uint16_t size, BLOCK_INFO blinfo)
 {
     uint8_t block_msg = 0; //bit7:    0申请失败,1申请成功;  
                            //bit6:    0分配小块(长度256),1分配大块(长度2048);
                            //bit5~3:  保留;
-                           //bit2~0:  申请块序号0~7.
+                           //bit2~0:  申请块序号0.
     
     if(size <= SMALL_BLOCK_SIZE)                                    //申请小块
     {
-        if(mempool.sbfree & 0x00FFFFFF)                             //优先分配小块
+        if(mempool.sbfree & 0x0000000F)                             //优先分配小块
         {
             
-            block_msg = (uint8_t)(mempool.sbfree & 0x00000007) - 1;          //申请块序号
+            block_msg = (uint8_t)(mempool.sbfree & 0x0000000F) - 1; //申请块序号
             block_msg |= 0x80;                                      //申请成功;分配小块 
-            mempool.sbfree = mempool.sbfree >> 3;                   //将块移除空闲队列
+            mempool.sbfree = mempool.sbfree >> 4;                   //将块移除空闲队列
         }
-        else if(mempool.lbfree & 0x00007FFF)                        //无可用小块则分配大块
+        else if(mempool.lbfree & 0x0000000F)                        //无可用小块则分配大块
         {
-            block_msg = (uint8_t)(mempool.lbfree & 0x00000007) - 1;          //申请块序号
+            block_msg = (uint8_t)(mempool.lbfree & 0x0000000F) - 1; //申请块序号
             block_msg |= 0xC0;                                      //申请成功;分配大块 
-            mempool.lbfree = mempool.lbfree >> 3;                   //将块移除空闲队列
+            mempool.lbfree = mempool.lbfree >> 4;                   //将块移除空闲队列
         }
         else                                                        //无可用空间块，申请失败
         {
@@ -106,11 +128,11 @@ uint8_t *Mem_malloc(uint16_t size, BLOCK_INFO blinfo)
     }
     else                                                            //申请大块
     {
-        block_msg = 0x80
-        if(mempool.lbfree & 0x00007FFF)                             //分配大块
+        block_msg = 0x80;
+        if(mempool.lbfree & 0x0000000F)                             //分配大块
         {
-            block_msg |= (uint8_t)(mempool.lbfree & 0x00007FFF) - 1;
-            mempool.lbfree = mempool.lbfree >> 3;
+            block_msg |= (uint8_t)(mempool.lbfree & 0x0000000F) - 1;
+            mempool.lbfree = mempool.lbfree >> 4;
         }
         else                                                        //无可用空间块，申请失败
         {
@@ -131,14 +153,31 @@ uint8_t *Mem_malloc(uint16_t size, BLOCK_INFO blinfo)
             return &sblock[block_msg & 0x07][0];
         }
     }
-    return 0x20000000; //申请失败
+    return 0x00000000; //申请失败
 }
 
-Mem_free(u8 *,u8)
+uint8_t Mem_free(BLOCK_SEQ block_seq, BLOCK_FREE_MODE mode)
 {
+    uint8_t zerobit = 0;
+    if(FREE_FORCE == mode)
+    {
+        if(block_seq <= SBLOCK7)
+        {
+            zerobit = mempool.sbfree
+            do{
+                zerobit &= 0x0F;
+                zerobit >>= 4;
+            }while(zerobit)
+        }
+        else
+        {
 
+        }
+    }
+    else
+    {
+            
+    }
 }
-
-
 
 
